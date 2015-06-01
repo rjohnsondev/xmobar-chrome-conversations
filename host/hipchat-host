@@ -2,8 +2,11 @@
 
 import struct
 import sys
+import os
 import threading
 import Queue
+
+fifo = "/tmp/xmobar-hipchat"
 
 # Thread that reads messages from the webapp.
 def read_thread_func(queue):
@@ -18,22 +21,31 @@ def read_thread_func(queue):
             text = text[1:-1]
         queue.put(text)
 
+def listen(queue):
+    try:
+        with open(fifo, "w") as f:
+            while True:
+                line = queue.get()
+                if line is None:
+                    break
+                f.write(line + "\n")
+                f.flush()
+    except IOError as err:
+        return err
+    return None
+
 def main():
     queue = Queue.Queue()
     thread = threading.Thread(target=read_thread_func, args=(queue,))
     thread.daemon = True
     thread.start()
+    if not os.path.exists(fifo):
+        os.mkfifo(fifo)
     while True:
-        try:
-            with open("/tmp/xmobar-hipchat", "w") as f:
-                while True:
-                    line = queue.get()
-                    if line is None:
-                        break
-                    f.write(line + "\n")
-                    f.flush()
-        except IOError as err:
-            print err
+        a = listen(queue)
+        if a is None:
+            break
+        print a
     sys.exit(0)
 
 if __name__ == '__main__':
